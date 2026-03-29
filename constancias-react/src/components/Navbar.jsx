@@ -7,8 +7,8 @@ export default function Navbar() {
   return (
     <nav className="nav">
       <div className="nav-brand">
-       <img src="/assets/logouat.png" alt="UAT" className="nav-brand-logo" />
-        <div className="nav-sub">FI Tampico · UAT<br/>Generador de Constancias</div>
+       <img src="/assets/uat-horizontal.png" alt="UAT" className="nav-brand-logo" />
+        <div className="nav-sub">FI Tampico · UAT<br/>Posgrado Generador</div>
       </div>
       <div className="nav-spacer" />
       <div className="nav-user">
