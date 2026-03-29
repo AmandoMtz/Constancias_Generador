@@ -247,6 +247,7 @@ def _reemplazar_preservando_runs(para, source, marcadores, datos_extra):
 
 def procesar_pptx(ruta, source, marcadores, datos_extra):
     from pptx import Presentation
+    from pptx.enum.text import MSO_AUTO_SIZE
 
     prs = Presentation(str(ruta))
 
@@ -255,7 +256,15 @@ def procesar_pptx(ruta, source, marcadores, datos_extra):
             if not shape.has_text_frame:
                 continue
 
-            for para in shape.text_frame.paragraphs:
+            tf = shape.text_frame
+
+            # Guardar auto_size original y desactivarlo antes de reemplazar
+            # para que el cuadro NO crezca y desacomode el layout
+            auto_size_original = tf.auto_size
+            if auto_size_original == MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT:
+                tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
+
+            for para in tf.paragraphs:
                 _reemplazar_preservando_runs(para, source, marcadores, datos_extra or {})
 
     buf = io.BytesIO()
