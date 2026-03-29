@@ -2,11 +2,9 @@ FROM node:20-slim
 
 WORKDIR /app
 
-COPY package*.json ./
-
-RUN npm install --include=dev
-
 COPY . .
+
+RUN rm -f package-lock.json && npm install
 
 RUN npm run build
 
