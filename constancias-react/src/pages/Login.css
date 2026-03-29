@@ -127,7 +127,7 @@
 }
 
 .login-main-logo {
-  width: min(100%, 250px);
+  width: min(100%, 300px);
   object-fit: contain;
   margin-bottom: 10px;
 }
