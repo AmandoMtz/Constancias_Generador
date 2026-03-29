@@ -1,8 +1,7 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from sqlalchemy import select
 from .auth import hash_password
 from .database import init_db, AsyncSessionLocal, Usuario
@@ -50,18 +49,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-class PDFHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        if "/archivo/" in request.url.path or "/preview/" in request.url.path:
-            response.headers["X-Frame-Options"] = "SAMEORIGIN"
-            response.headers["Content-Security-Policy"] = "frame-ancestors 'self'"
-        return response
-
-
-app.add_middleware(PDFHeadersMiddleware)
 
 from .routers import auth, usuarios, personas, plantillas, constancias, envios, excel
 
