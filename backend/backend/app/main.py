@@ -1,11 +1,9 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from .auth import hash_password
-from .config import get_cors_origins
 from .database import init_db, AsyncSessionLocal, Usuario
 
 
@@ -15,8 +13,8 @@ async def crear_admin_default():
         admin = result.scalar_one_or_none()
         if not admin:
             admin_name = os.getenv("DEFAULT_ADMIN_NAME", "Administrador General")
-            admin_email = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@tu-dominio.com")
-            admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "CambiaEstoYa123!")
+            admin_email = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@uat.edu.mx")
+            admin_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "Admin2026!")
             admin = Usuario(
                 nombre=admin_name,
                 email=admin_email,
@@ -50,6 +48,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    max_age=3600,
 )
 
 from .routers import auth, usuarios, personas, plantillas, constancias, envios, excel
