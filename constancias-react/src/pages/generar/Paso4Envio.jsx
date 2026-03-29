@@ -143,7 +143,8 @@ export default function Paso4Envio({
     if (urlPreview.startsWith('http://') || urlPreview.startsWith('https://')) {
       return urlPreview
     }
-    return `${API}${urlPreview}?token=${token}`
+    const path = urlPreview.replace(/^\/api/, '')
+    return `${API}${path}?token=${token}`
   }
 
   function archivoUrl(urlArchivo) {
@@ -151,7 +152,8 @@ export default function Paso4Envio({
     if (urlArchivo.startsWith('http://') || urlArchivo.startsWith('https://')) {
       return urlArchivo
     }
-    return `${API}${urlArchivo}?token=${token}`
+    const path = urlArchivo.replace(/^\/api/, '')
+    return `${API}${path}?token=${token}`
   }
 
   async function abrirPreview(p) {
