@@ -66,7 +66,7 @@ export default function Login() {
         <section className="login-panel-wrap">
           <div className="login-card">
             <div className="login-logo-block">
-              <img src="/assets/uat-horizontal.png" alt="Universidad Autónoma de Tamaulipas" className="login-main-logo" />
+              <img src="/assets/uat-horizontal-negro.png" alt="Universidad Autónoma de Tamaulipas" className="login-main-logo" />
               <div className="login-inst-name">FI Tampico · UAT</div>
               <div className="login-inst-sub">División de Estudios de Posgrado e Investigación</div>
             </div>
