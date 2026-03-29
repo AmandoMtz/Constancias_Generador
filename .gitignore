@@ -1,0 +1,14 @@
+# Frontend
+constancias-react/node_modules/
+constancias-react/dist/
+
+# Backend
+backend/backend/venv/
+backend/backend/__pycache__/
+backend/backend/app/__pycache__/
+backend/backend/app/routers/__pycache__/
+backend/backend/data/
+backend/backend/*.db
+
+# Env
+backend/backend/.env
