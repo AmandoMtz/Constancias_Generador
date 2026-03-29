@@ -195,6 +195,56 @@ def procesar_docx(ruta, source, marcadores, datos_extra):
     return buf.getvalue()
 
 
+def _tiene_marcador(texto, marcadores, datos_extra):
+    """Detecta si un texto contiene algún marcador a reemplazar."""
+    from copy import deepcopy
+    nuevo = reemplazar_marcadores(texto, {}, marcadores, datos_extra or {})
+    return nuevo != texto
+
+
+def _reemplazar_preservando_runs(para, source, marcadores, datos_extra):
+    """
+    Reemplaza marcadores en un párrafo preservando el formato (bold, italic,
+    fuente, tamaño) de cada run. Maneja el caso donde un marcador está partido
+    entre varios runs concatenando solo los runs afectados.
+    """
+    from pptx.util import Pt
+    from copy import deepcopy
+    import lxml.etree as etree
+
+    if not para.runs:
+        return
+
+    # Paso 1: intentar reemplazar run por run (caso simple — marcador en un solo run)
+    algun_cambio = False
+    for run in para.runs:
+        original = run.text
+        nuevo = reemplazar_marcadores(original, source, marcadores, datos_extra or {})
+        if nuevo != original:
+            run.text = nuevo
+            algun_cambio = True
+
+    if algun_cambio:
+        return
+
+    # Paso 2: si el marcador está partido entre runs, trabajar con el texto completo
+    # pero preservar el formato del PRIMER run que contenga texto real
+    texto_full = "".join(run.text for run in para.runs)
+    nuevo_texto = reemplazar_marcadores(texto_full, source, marcadores, datos_extra or {})
+
+    if nuevo_texto == texto_full:
+        return  # no hay nada que cambiar
+
+    # Encontrar el primer run con contenido para heredar su formato
+    primer_run = next((r for r in para.runs if r.text.strip()), para.runs[0])
+
+    # Poner el texto nuevo en el primer run, vaciar los demás
+    primer_run.text = nuevo_texto
+    for run in para.runs:
+        if run is not primer_run:
+            run.text = ""
+
+
 def procesar_pptx(ruta, source, marcadores, datos_extra):
     from pptx import Presentation
 
@@ -206,24 +256,7 @@ def procesar_pptx(ruta, source, marcadores, datos_extra):
                 continue
 
             for para in shape.text_frame.paragraphs:
-                cambio_run = False
-                for run in para.runs:
-                    original = run.text
-                    nuevo = reemplazar_marcadores(original, source, marcadores, datos_extra or {})
-                    if nuevo != original:
-                        run.text = nuevo
-                        cambio_run = True
-
-                if cambio_run:
-                    continue
-
-                texto_full = "".join(run.text for run in para.runs)
-                nuevo_texto = reemplazar_marcadores(texto_full, source, marcadores, datos_extra or {})
-
-                if nuevo_texto != texto_full and para.runs:
-                    para.runs[0].text = nuevo_texto
-                    for run in para.runs[1:]:
-                        run.text = ""
+                _reemplazar_preservando_runs(para, source, marcadores, datos_extra or {})
 
     buf = io.BytesIO()
     prs.save(buf)
