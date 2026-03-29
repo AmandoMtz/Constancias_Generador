@@ -1,18 +1,14 @@
-FROM node:20-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
-RUN rm -f package-lock.json && npm install
+RUN mkdir -p /app/data
 
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
+EXPOSE 8080
 
-RUN npm run build
-
-RUN npm install -g http-server
-
-EXPOSE 3000
-
-CMD ["http-server", "dist", "-p", "3000", "--proxy", "http://localhost:3000?"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --h11-max-incomplete-event-size 65536"]
