@@ -7,7 +7,7 @@ export default function Navbar() {
   return (
     <nav className="nav">
       <div className="nav-brand">
-        <img src="/assets/uat-horizontal.png" alt="UAT" className="nav-brand-logo" />
+        <img src="/assets/logouat.png" alt="UAT" className="nav-brand-logo" />
         <div className="nav-sub">FI Tampico · UAT<br/>Generador de Constancias</div>
       </div>
       <div className="nav-spacer" />
