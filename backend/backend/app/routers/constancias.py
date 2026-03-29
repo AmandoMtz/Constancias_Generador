@@ -231,50 +231,35 @@ def procesar_pptx(ruta, source, marcadores, datos_extra):
 
 
 def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
+    import subprocess
     import traceback
-
-    try:
-        import win32com.client
-    except Exception as e:
-        raise RuntimeError(f"No se pudo importar win32com.client: {e}")
 
     with tempfile.TemporaryDirectory(prefix="const_pdf_") as tmpdir:
         outdir = Path(tmpdir)
-        pdf_path = outdir / f"{input_path.stem}.pdf"
-
-        powerpoint = None
-        presentation = None
 
         try:
-            print("USANDO POWERPOINT COM PARA PDF")
-            powerpoint = win32com.client.Dispatch("PowerPoint.Application")
-            powerpoint.Visible = 1
-
-            presentation = powerpoint.Presentations.Open(
-                str(input_path),
-                WithWindow=False
+            result = subprocess.run(
+                [
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to", "pdf",
+                    "--outdir", str(outdir),
+                    str(input_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
-            presentation.SaveAs(str(pdf_path), 32)  # 32 = PDF
-            presentation.Close()
-            presentation = None
 
+            if result.returncode != 0:
+                raise RuntimeError(f"LibreOffice error: {result.stderr}")
+
+        except FileNotFoundError:
+            raise RuntimeError("LibreOffice no está instalado en el servidor")
         except Exception as e:
-            detalle = traceback.format_exc()
-            raise RuntimeError(f"Error al convertir con PowerPoint COM: {e}\n\n{detalle}")
+            raise RuntimeError(f"Error al convertir con LibreOffice: {e}\n{traceback.format_exc()}")
 
-        finally:
-            try:
-                if presentation is not None:
-                    presentation.Close()
-            except Exception:
-                pass
-
-            try:
-                if powerpoint is not None:
-                    powerpoint.Quit()
-            except Exception:
-                pass
-
+        pdf_path = outdir / f"{input_path.stem}.pdf"
         if not pdf_path.exists():
             raise RuntimeError(f"No se generó el PDF esperado: {pdf_path}")
 
