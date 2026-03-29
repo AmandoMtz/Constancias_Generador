@@ -691,7 +691,15 @@ async def preview_constancia(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generando thumbnail: {e}")
 
-    return StreamingResponse(io.BytesIO(img_bytes), media_type="image/png")
+    return StreamingResponse(
+    io.BytesIO(img_bytes),
+    media_type="image/png",
+    headers={
+        "Access-Control-Allow-Origin": "*",
+        "Cross-Origin-Resource-Policy": "cross-origin",
+        "Cache-Control": "no-store",
+    },
+)
 
 
 @router.get("/lote/{envio_id}/zip")
