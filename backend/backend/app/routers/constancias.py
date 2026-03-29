@@ -537,17 +537,9 @@ async def generar_lote(envio_id, plantilla, personas, metodo, marcadores, datos_
         try:
             if formato in {"docx", "pptx"}:
                 if _estado[envio_id].get("como_pdf", True):
-                    try:
-                        data = _generar_pdf_desde_plantilla(ruta, formato, source, marcadores, datos_extra)
-                        ext_out = "pdf"
-                    except Exception as pdf_err:
-                        # Fallback: guardar en formato original si CloudConvert falla
-                        print(f"[AVISO] Conversión PDF falló para constancia {idx}: {pdf_err}. Usando formato original ({formato})")
-                        if formato == "docx":
-                            data = procesar_docx(ruta, source, marcadores, datos_extra)
-                        else:
-                            data = procesar_pptx(ruta, source, marcadores, datos_extra)
-                        ext_out = formato
+                    # Siempre PDF — sin fallback a formato original
+                    data = _generar_pdf_desde_plantilla(ruta, formato, source, marcadores, datos_extra)
+                    ext_out = "pdf"
                 elif formato == "docx":
                     data = procesar_docx(ruta, source, marcadores, datos_extra)
                     ext_out = "docx"
