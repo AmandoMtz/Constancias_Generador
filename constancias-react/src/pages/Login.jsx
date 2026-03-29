@@ -32,7 +32,7 @@ export default function Login() {
       const fd = new FormData()
       fd.append('username', email)
       fd.append('password', pass)
-      const r = await fetch('/api/auth/login', { method: 'POST', body: fd })
+      const r = await fetch('https://constanciasgenerador-production.up.railway.app/api/auth/login', { method: 'POST', body: fd })
       const d = await r.json()
       if (!r.ok) throw new Error(d.detail || 'Error al iniciar sesión')
       login(d.access_token, d.usuario)
