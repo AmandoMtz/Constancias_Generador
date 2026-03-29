@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
 from typing import List, Optional, Any
-import asyncio, zipfile, re, io
+import asyncio, zipfile, re, io, os
 from pathlib import Path
 from openpyxl import load_workbook
 from ..config import LOTES_DIR, UPLOADS_EXCEL_DIR
@@ -240,15 +240,12 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
 
     ext = input_path.suffix.lower().lstrip(".")
 
-    # 1. Crear el job
     job = requests.post(
         "https://api.cloudconvert.com/v2/jobs",
         headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
         json={
             "tasks": {
-                "upload-file": {
-                    "operation": "import/upload"
-                },
+                "upload-file": {"operation": "import/upload"},
                 "convert-file": {
                     "operation": "convert",
                     "input": "upload-file",
@@ -264,7 +261,6 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
         }
     ).json()
 
-    # 2. Subir el archivo
     upload_task = next(t for t in job["data"]["tasks"] if t["name"] == "upload-file")
     upload_url = upload_task["result"]["form"]["url"]
     upload_params = upload_task["result"]["form"]["parameters"]
@@ -272,7 +268,6 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
     with open(input_path, "rb") as f:
         requests.post(upload_url, data=upload_params, files={"file": f})
 
-    # 3. Esperar resultado
     job_id = job["data"]["id"]
     for _ in range(30):
         time.sleep(2)
@@ -290,10 +285,6 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
             raise RuntimeError(f"CloudConvert error: {status}")
 
     raise RuntimeError("CloudConvert timeout")
-```
-
-```
-CLOUDCONVERT_API_KEY=tu_api_key_aqui
 
 
 def _generar_pdf_desde_plantilla(ruta: Path, formato: str, source, marcadores, datos_extra) -> bytes:
@@ -320,7 +311,6 @@ def _generar_thumbnail_desde_archivo(archivo: Path) -> bytes:
     try:
         if ext == "pdf":
             import fitz
-
             doc = fitz.open(str(archivo))
             page = doc.load_page(0)
             pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), alpha=False)
@@ -396,6 +386,7 @@ def _generar_thumbnail_desde_archivo(archivo: Path) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
+
 
 def _iter_excel_rows(excel_source: ExcelSource):
     ruta = _excel_path(excel_source.excel_id)
@@ -537,6 +528,7 @@ async def generar_lote(envio_id, plantilla, personas, metodo, marcadores, datos_
             envio.zip_listo = _estado[envio_id]["zip_listo"]
             envio.ruta_zip = _estado[envio_id].get("zip_path")
             await session.commit()
+
 
 @router.post("/generar")
 async def generar_constancias(
@@ -733,8 +725,8 @@ async def descargar_archivo_generado(
     }.get(archivo.suffix.lower(), "application/octet-stream")
 
     return FileResponse(
-    str(archivo),
-    media_type=media,
-    filename=archivo.name,
-    content_disposition_type="inline",
-)
+        str(archivo),
+        media_type=media,
+        filename=archivo.name,
+        content_disposition_type="inline",
+    )
