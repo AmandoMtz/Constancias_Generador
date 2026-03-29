@@ -292,7 +292,6 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
     raise RuntimeError("CloudConvert timeout")
 ```
 
-Luego agrega en Railway → **Constancias_Generador** → **Variables**:
 ```
 CLOUDCONVERT_API_KEY=tu_api_key_aqui
 
