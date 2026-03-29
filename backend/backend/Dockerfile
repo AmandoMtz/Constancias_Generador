@@ -6,10 +6,9 @@ RUN apt-get update && apt-get install -y \
     libreoffice \
     fonts-liberation \
     fonts-dejavu \
+    fonts-freefont-ttf \
     fontconfig \
     --no-install-recommends \
-    && echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections \
-    && apt-get install -y ttf-mscorefonts-installer --no-install-recommends \
     && fc-cache -f -v \
     && rm -rf /var/lib/apt/lists/*
 
