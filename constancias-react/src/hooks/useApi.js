@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 
-const API = '/api'
+const API = 'https://constanciasgenerador-production.up.railway.app/api'
 
 export function useApi() {
   const { token, logout } = useAuth()
