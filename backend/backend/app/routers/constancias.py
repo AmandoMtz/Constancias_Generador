@@ -240,7 +240,7 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
 
     ext = input_path.suffix.lower().lstrip(".")
 
-    job = requests.post(
+    job_resp = requests.post(
         "https://api.cloudconvert.com/v2/jobs",
         headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
         json={
@@ -259,7 +259,11 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
                 }
             }
         }
-    ).json()
+    )
+    job = job_resp.json()
+
+    if "data" not in job:
+        raise RuntimeError(f"CloudConvert error al crear job (HTTP {job_resp.status_code}): {job}")
 
     upload_task = next(t for t in job["data"]["tasks"] if t["name"] == "upload-file")
     upload_url = upload_task["result"]["form"]["url"]
