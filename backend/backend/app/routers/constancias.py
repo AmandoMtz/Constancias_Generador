@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Header
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 import tempfile, shutil
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -195,18 +195,12 @@ def procesar_docx(ruta, source, marcadores, datos_extra):
 
 
 def _tiene_marcador(texto, marcadores, datos_extra):
-    """Detecta si un texto contiene algún marcador a reemplazar."""
     from copy import deepcopy
     nuevo = reemplazar_marcadores(texto, {}, marcadores, datos_extra or {})
     return nuevo != texto
 
 
 def _reemplazar_preservando_runs(para, source, marcadores, datos_extra):
-    """
-    Reemplaza marcadores en un párrafo preservando el formato (bold, italic,
-    fuente, tamaño) de cada run. Maneja el caso donde un marcador está partido
-    entre varios runs concatenando solo los runs afectados.
-    """
     from pptx.util import Pt
     from copy import deepcopy
     import lxml.etree as etree
@@ -214,7 +208,6 @@ def _reemplazar_preservando_runs(para, source, marcadores, datos_extra):
     if not para.runs:
         return
 
-    # Paso 1: intentar reemplazar run por run (caso simple — marcador en un solo run)
     algun_cambio = False
     for run in para.runs:
         original = run.text
@@ -226,18 +219,14 @@ def _reemplazar_preservando_runs(para, source, marcadores, datos_extra):
     if algun_cambio:
         return
 
-    # Paso 2: si el marcador está partido entre runs, trabajar con el texto completo
-    # pero preservar el formato del PRIMER run que contenga texto real
     texto_full = "".join(run.text for run in para.runs)
     nuevo_texto = reemplazar_marcadores(texto_full, source, marcadores, datos_extra or {})
 
     if nuevo_texto == texto_full:
-        return  # no hay nada que cambiar
+        return
 
-    # Encontrar el primer run con contenido para heredar su formato
     primer_run = next((r for r in para.runs if r.text.strip()), para.runs[0])
 
-    # Poner el texto nuevo en el primer run, vaciar los demás
     primer_run.text = nuevo_texto
     for run in para.runs:
         if run is not primer_run:
@@ -257,8 +246,6 @@ def procesar_pptx(ruta, source, marcadores, datos_extra):
 
             tf = shape.text_frame
 
-            # Guardar auto_size original y desactivarlo antes de reemplazar
-            # para que el cuadro NO crezca y desacomode el layout
             auto_size_original = tf.auto_size
             if auto_size_original == MSO_AUTO_SIZE.SHAPE_TO_FIT_TEXT:
                 tf.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE
@@ -272,7 +259,6 @@ def procesar_pptx(ruta, source, marcadores, datos_extra):
 
 
 def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
-    """Convierte docx/pptx a PDF usando LibreOffice (gratis, sin limites, sin API key)."""
     import subprocess
 
     print(f"[LibreOffice] Convirtiendo {input_path.name} a PDF...")
@@ -493,7 +479,6 @@ async def generar_lote(envio_id, plantilla, personas, metodo, marcadores, datos_
         try:
             if formato in {"docx", "pptx"}:
                 if _estado[envio_id].get("como_pdf", True):
-                    # Siempre PDF — sin fallback a formato original
                     data = _generar_pdf_desde_plantilla(ruta, formato, source, marcadores, datos_extra)
                     ext_out = "pdf"
                 elif formato == "docx":
@@ -758,9 +743,16 @@ async def descargar_archivo_generado(
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }.get(archivo.suffix.lower(), "application/octet-stream")
 
-    return FileResponse(
-        str(archivo),
+    # Leer el archivo y devolverlo como Response con headers permisivos
+    # para que el navegador pueda mostrarlo inline sin bloqueos cross-origin
+    contenido = archivo.read_bytes()
+    return Response(
+        content=contenido,
         media_type=media,
-        filename=archivo.name,
-        content_disposition_type="inline",
+        headers={
+            "Content-Disposition": f'inline; filename="{nombre_archivo}"',
+            "Access-Control-Allow-Origin": "*",
+            "Cross-Origin-Resource-Policy": "cross-origin",
+            "Cache-Control": "no-store",
+        },
     )
