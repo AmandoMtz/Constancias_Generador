@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 
-const API = 'http://gondola.proxy.rlwy.net:53531/api'
+const API = import.meta.env.VITE_API_URL || 'https://constanciasgenerador-production.up.railway.app/api'
 
 export function useApi() {
   const { token, logout } = useAuth()
