@@ -236,59 +236,91 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
 
     CLOUDCONVERT_API_KEY = os.getenv("CLOUDCONVERT_API_KEY", "")
     if not CLOUDCONVERT_API_KEY:
-        raise RuntimeError("CLOUDCONVERT_API_KEY no configurada")
+        raise RuntimeError("CLOUDCONVERT_API_KEY no configurada en las variables de entorno")
 
     ext = input_path.suffix.lower().lstrip(".")
 
-    job_resp = requests.post(
-        "https://api.cloudconvert.com/v2/jobs",
-        headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
-        json={
-            "tasks": {
-                "upload-file": {"operation": "import/upload"},
-                "convert-file": {
-                    "operation": "convert",
-                    "input": "upload-file",
-                    "input_format": ext,
-                    "output_format": "pdf",
-                    "engine": "office"
-                },
-                "export-file": {
-                    "operation": "export/url",
-                    "input": "convert-file"
+    print(f"[CloudConvert] Iniciando conversión de {input_path.name} ({ext} → pdf)")
+
+    try:
+        job_resp = requests.post(
+            "https://api.cloudconvert.com/v2/jobs",
+            headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
+            json={
+                "tasks": {
+                    "upload-file": {"operation": "import/upload"},
+                    "convert-file": {
+                        "operation": "convert",
+                        "input": "upload-file",
+                        "input_format": ext,
+                        "output_format": "pdf",
+                        "engine": "office"
+                    },
+                    "export-file": {
+                        "operation": "export/url",
+                        "input": "convert-file"
+                    }
                 }
-            }
-        }
-    )
-    job = job_resp.json()
+            },
+            timeout=30,
+        )
+    except Exception as e:
+        raise RuntimeError(f"CloudConvert: error de red al crear job: {e}")
+
+    print(f"[CloudConvert] Respuesta HTTP {job_resp.status_code}: {job_resp.text[:300]}")
+
+    try:
+        job = job_resp.json()
+    except Exception:
+        raise RuntimeError(f"CloudConvert: respuesta no es JSON (HTTP {job_resp.status_code}): {job_resp.text[:200]}")
 
     if "data" not in job:
-        raise RuntimeError(f"CloudConvert error al crear job (HTTP {job_resp.status_code}): {job}")
+        msg = job.get("message") or job.get("error") or str(job)
+        raise RuntimeError(f"CloudConvert rechazó el job (HTTP {job_resp.status_code}): {msg}")
 
-    upload_task = next(t for t in job["data"]["tasks"] if t["name"] == "upload-file")
+    upload_task = next((t for t in job["data"]["tasks"] if t["name"] == "upload-file"), None)
+    if not upload_task:
+        raise RuntimeError("CloudConvert: no se encontró la tarea de upload en el job")
+
     upload_url = upload_task["result"]["form"]["url"]
     upload_params = upload_task["result"]["form"]["parameters"]
 
     with open(input_path, "rb") as f:
-        requests.post(upload_url, data=upload_params, files={"file": f})
+        upload_resp = requests.post(upload_url, data=upload_params, files={"file": f}, timeout=60)
+    print(f"[CloudConvert] Upload HTTP {upload_resp.status_code}")
 
     job_id = job["data"]["id"]
-    for _ in range(30):
+    for intento in range(30):
         time.sleep(2)
-        status = requests.get(
+        status_resp = requests.get(
             f"https://api.cloudconvert.com/v2/jobs/{job_id}",
             headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
-        ).json()
+            timeout=30,
+        )
+        status = status_resp.json()
 
-        if status["data"]["status"] == "finished":
-            export_task = next(t for t in status["data"]["tasks"] if t["name"] == "export-file")
+        if "data" not in status:
+            raise RuntimeError(f"CloudConvert: respuesta de estado inválida: {status}")
+
+        job_status = status["data"]["status"]
+        print(f"[CloudConvert] Intento {intento+1}/30 — estado: {job_status}")
+
+        if job_status == "finished":
+            export_task = next((t for t in status["data"]["tasks"] if t["name"] == "export-file"), None)
+            if not export_task:
+                raise RuntimeError("CloudConvert: no se encontró la tarea de export en resultado")
             pdf_url = export_task["result"]["files"][0]["url"]
-            return requests.get(pdf_url).content
+            pdf_bytes = requests.get(pdf_url, timeout=60).content
+            print(f"[CloudConvert] PDF descargado OK ({len(pdf_bytes)} bytes)")
+            return pdf_bytes
 
-        if status["data"]["status"] == "error":
-            raise RuntimeError(f"CloudConvert error: {status}")
+        if job_status == "error":
+            tasks_errors = [
+                t.get("message", "") for t in status["data"].get("tasks", []) if t.get("status") == "error"
+            ]
+            raise RuntimeError(f"CloudConvert falló: {'; '.join(tasks_errors) or status}")
 
-    raise RuntimeError("CloudConvert timeout")
+    raise RuntimeError("CloudConvert timeout: el job tardó más de 60 segundos")
 
 
 def _generar_pdf_desde_plantilla(ruta: Path, formato: str, source, marcadores, datos_extra) -> bytes:
@@ -464,8 +496,17 @@ async def generar_lote(envio_id, plantilla, personas, metodo, marcadores, datos_
         try:
             if formato in {"docx", "pptx"}:
                 if _estado[envio_id].get("como_pdf", True):
-                    data = _generar_pdf_desde_plantilla(ruta, formato, source, marcadores, datos_extra)
-                    ext_out = "pdf"
+                    try:
+                        data = _generar_pdf_desde_plantilla(ruta, formato, source, marcadores, datos_extra)
+                        ext_out = "pdf"
+                    except Exception as pdf_err:
+                        # Fallback: guardar en formato original si CloudConvert falla
+                        print(f"[AVISO] Conversión PDF falló para constancia {idx}: {pdf_err}. Usando formato original ({formato})")
+                        if formato == "docx":
+                            data = procesar_docx(ruta, source, marcadores, datos_extra)
+                        else:
+                            data = procesar_pptx(ruta, source, marcadores, datos_extra)
+                        ext_out = formato
                 elif formato == "docx":
                     data = procesar_docx(ruta, source, marcadores, datos_extra)
                     ext_out = "docx"
