@@ -30,6 +30,7 @@ export default function Paso4Envio({
   const [zipListo, setZipListo] = useState(false)
   const [previews, setPreviews] = useState([])
   const [previewActiva, setPreviewActiva] = useState(null)
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null)
 
   async function ejecutar() {
     if (!marcadores.length) {
@@ -123,34 +124,55 @@ export default function Paso4Envio({
     }
   }
 
- async function cargarPreviews(eid) {
-  try {
-    const data = await requestJSON(`/constancias/lote/${eid}/previews`)
-    if (Array.isArray(data) && data.length > 0) {
-      setPreviews(data)
-    } else {
+  async function cargarPreviews(eid) {
+    try {
+      const data = await requestJSON(`/constancias/lote/${eid}/previews`)
+      if (Array.isArray(data) && data.length > 0) {
+        setPreviews(data)
+      } else {
+        setPreviews([])
+      }
+    } catch (error) {
+      console.error('Error cargando previews:', error)
       setPreviews([])
     }
-  } catch (error) {
-    console.error('Error cargando previews:', error)
-    setPreviews([])
   }
-}
-function thumbUrl(urlPreview) {
-  if (!urlPreview) return '#'
-  if (urlPreview.startsWith('http://') || urlPreview.startsWith('https://')) {
-    return urlPreview
-  }
-  return `${API}${urlPreview}?token=${token}`  // ✅
-}
 
-function archivoUrl(urlArchivo) {
-  if (!urlArchivo) return '#'
-  if (urlArchivo.startsWith('http://') || urlArchivo.startsWith('https://')) {
-    return urlArchivo
+  function thumbUrl(urlPreview) {
+    if (!urlPreview) return '#'
+    if (urlPreview.startsWith('http://') || urlPreview.startsWith('https://')) {
+      return urlPreview
+    }
+    return `${API}${urlPreview}?token=${token}`
   }
-  return `${API}${urlArchivo}?token=${token}`  // ✅
-}
+
+  function archivoUrl(urlArchivo) {
+    if (!urlArchivo) return '#'
+    if (urlArchivo.startsWith('http://') || urlArchivo.startsWith('https://')) {
+      return urlArchivo
+    }
+    return `${API}${urlArchivo}?token=${token}`
+  }
+
+  async function abrirPreview(p) {
+    setPreviewActiva(p)
+    setPdfBlobUrl(null)
+    try {
+      const res = await fetch(archivoUrl(p.url_archivo))
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      setPdfBlobUrl(url)
+    } catch (e) {
+      console.error('Error cargando PDF como blob:', e)
+    }
+  }
+
+  function cerrarPreview() {
+    setPreviewActiva(null)
+    if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl)
+    setPdfBlobUrl(null)
+  }
+
   const alumnosSeleccionados = alumnos.filter(a => selectedAlumnoIds.includes(a.id))
 
   const pct = progreso?.total
@@ -207,7 +229,6 @@ function archivoUrl(urlArchivo) {
           </div>
         )}
       </div>
-      
 
       <div className="panel">
         <div className="panel-title">Método de salida</div>
@@ -267,47 +288,68 @@ function archivoUrl(urlArchivo) {
       )}
 
       {previews.length > 0 && (
-  <div className="panel">
-    <div className="panel-title">Previsualización ({previews.length})</div>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, paddingTop: 4 }}>
-      {previews.map((p, i) => (
-        <PreviewCard
-          key={i}
-          src={thumbUrl(p.url_preview)}
-          nombre={p.nombre_archivo}
-          onClick={() => setPreviewActiva(p)}
-        />
-      ))}
-    </div>
-  </div>
-)}
+        <div className="panel">
+          <div className="panel-title">Previsualización ({previews.length})</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, paddingTop: 4 }}>
+            {previews.map((p, i) => (
+              <PreviewCard
+                key={i}
+                src={thumbUrl(p.url_preview)}
+                nombre={p.nombre_archivo}
+                onClick={() => abrirPreview(p)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
-     {previewActiva && (
-  <Modal title={previewActiva.nombre_archivo} onClose={() => setPreviewActiva(null)}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <a href={archivoUrl(previewActiva.url_archivo)}
-          download={previewActiva.nombre_archivo}
-          className="btn btn-success"
-          style={{ textDecoration: 'none', fontSize: 13, padding: '6px 14px' }}>
-          ⬇ Descargar PDF
-        </a>
-      </div>
-      <embed
-        src={archivoUrl(previewActiva.url_archivo)}
-        type="application/pdf"
-        style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '10px' }}
-      />
-      <p style={{ fontSize: 12, color: '#999', textAlign: 'center', margin: 0 }}>
-        ¿No se muestra?{' '}
-        <a href={archivoUrl(previewActiva.url_archivo)} target="_blank" rel="noopener noreferrer"
-          style={{ color: 'var(--rojo)' }}>
-          Ábrelo en nueva pestaña
-        </a>
-      </p>
-    </div>
-  </Modal>
-)}
+      {previewActiva && (
+        <Modal title={previewActiva.nombre_archivo} onClose={cerrarPreview}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <a
+                href={archivoUrl(previewActiva.url_archivo)}
+                download={previewActiva.nombre_archivo}
+                className="btn btn-success"
+                style={{ textDecoration: 'none', fontSize: 13, padding: '6px 14px' }}
+              >
+                ⬇ Descargar PDF
+              </a>
+            </div>
+
+            {pdfBlobUrl ? (
+              <embed
+                src={pdfBlobUrl}
+                type="application/pdf"
+                style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '10px' }}
+              />
+            ) : (
+              <div style={{
+                height: '80vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#999',
+                fontSize: 14,
+              }}>
+                ⏳ Cargando PDF...
+              </div>
+            )}
+
+            <p style={{ fontSize: 12, color: '#999', textAlign: 'center', margin: 0 }}>
+              ¿No se muestra?{' '}
+              <a
+                href={archivoUrl(previewActiva.url_archivo)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'var(--rojo)' }}
+              >
+                Ábrelo en nueva pestaña
+              </a>
+            </p>
+          </div>
+        </Modal>
+      )}
 
       <div className="actions">
         <button className="btn btn-ghost" onClick={onPrev} disabled={generando}>
