@@ -136,12 +136,12 @@ export default function Paso4Envio({
     setPreviews([])
   }
 }
- function thumbUrl(urlPreview) {
+function thumbUrl(urlPreview) {
   if (!urlPreview) return '#'
   if (urlPreview.startsWith('http://') || urlPreview.startsWith('https://')) {
     return urlPreview
   }
-  return `${urlPreview}?token=${token}`
+  return `${API}${urlPreview}?token=${token}`  // ✅
 }
 
 function archivoUrl(urlArchivo) {
@@ -149,7 +149,7 @@ function archivoUrl(urlArchivo) {
   if (urlArchivo.startsWith('http://') || urlArchivo.startsWith('https://')) {
     return urlArchivo
   }
-  return `${urlArchivo}?token=${token}`
+  return `${API}${urlArchivo}?token=${token}`  // ✅
 }
   const alumnosSeleccionados = alumnos.filter(a => selectedAlumnoIds.includes(a.id))
 
