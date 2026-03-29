@@ -239,13 +239,15 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
         raise RuntimeError("CLOUDCONVERT_API_KEY no configurada en las variables de entorno")
 
     ext = input_path.suffix.lower().lstrip(".")
+    print(f"[CloudConvert] Iniciando conversion de {input_path.name} ({ext} -> pdf)")
 
-    print(f"[CloudConvert] Iniciando conversión de {input_path.name} ({ext} → pdf)")
+    auth_headers = {"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"}
 
+    # Paso 1: crear el job
     try:
         job_resp = requests.post(
             "https://api.cloudconvert.com/v2/jobs",
-            headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
+            headers=auth_headers,
             json={
                 "tasks": {
                     "upload-file": {"operation": "import/upload"},
@@ -254,12 +256,12 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
                         "input": "upload-file",
                         "input_format": ext,
                         "output_format": "pdf",
-                        "engine": "office"
+                        "engine": "office",
                     },
                     "export-file": {
                         "operation": "export/url",
-                        "input": "convert-file"
-                    }
+                        "input": "convert-file",
+                    },
                 }
             },
             timeout=30,
@@ -267,60 +269,99 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
     except Exception as e:
         raise RuntimeError(f"CloudConvert: error de red al crear job: {e}")
 
-    print(f"[CloudConvert] Respuesta HTTP {job_resp.status_code}: {job_resp.text[:300]}")
+    print(f"[CloudConvert] Crear job -> HTTP {job_resp.status_code}: {job_resp.text[:500]}")
 
     try:
         job = job_resp.json()
     except Exception:
-        raise RuntimeError(f"CloudConvert: respuesta no es JSON (HTTP {job_resp.status_code}): {job_resp.text[:200]}")
+        raise RuntimeError(
+            f"CloudConvert: respuesta no es JSON (HTTP {job_resp.status_code}): {job_resp.text[:300]}"
+        )
 
     if "data" not in job:
         msg = job.get("message") or job.get("error") or str(job)
-        raise RuntimeError(f"CloudConvert rechazó el job (HTTP {job_resp.status_code}): {msg}")
-
-    upload_task = next((t for t in job["data"]["tasks"] if t["name"] == "upload-file"), None)
-    if not upload_task:
-        raise RuntimeError("CloudConvert: no se encontró la tarea de upload en el job")
-
-    upload_url = upload_task["result"]["form"]["url"]
-    upload_params = upload_task["result"]["form"]["parameters"]
-
-    with open(input_path, "rb") as f:
-        upload_resp = requests.post(upload_url, data=upload_params, files={"file": f}, timeout=60)
-    print(f"[CloudConvert] Upload HTTP {upload_resp.status_code}")
+        raise RuntimeError(f"CloudConvert rechazo el job (HTTP {job_resp.status_code}): {msg}")
 
     job_id = job["data"]["id"]
-    for intento in range(30):
-        time.sleep(2)
-        status_resp = requests.get(
-            f"https://api.cloudconvert.com/v2/jobs/{job_id}",
-            headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
-            timeout=30,
+
+    # La tarea import/upload tiene su URL en result.form dentro del job creado
+    upload_task = next(
+        (t for t in job["data"]["tasks"] if t.get("operation") == "import/upload"),
+        None,
+    )
+    if not upload_task:
+        all_tasks = [(t.get("name"), t.get("operation")) for t in job["data"]["tasks"]]
+        raise RuntimeError(f"CloudConvert: no se encontro tarea import/upload. Tareas: {all_tasks}")
+
+    task_result = upload_task.get("result") or {}
+    task_form = task_result.get("form") or {}
+    upload_url = task_form.get("url")
+    upload_params = task_form.get("parameters") or {}
+
+    if not upload_url:
+        raise RuntimeError(
+            f"CloudConvert: la tarea upload no tiene URL de subida. result={task_result}"
         )
-        status = status_resp.json()
+
+    # Paso 2: subir el archivo
+    with open(input_path, "rb") as f:
+        up_resp = requests.post(
+            upload_url,
+            data=upload_params,
+            files={"file": (input_path.name, f)},
+            timeout=120,
+        )
+    print(f"[CloudConvert] Upload -> HTTP {up_resp.status_code}")
+    if up_resp.status_code not in (200, 201, 204):
+        raise RuntimeError(
+            f"CloudConvert: fallo el upload (HTTP {up_resp.status_code}): {up_resp.text[:200]}"
+        )
+
+    # Paso 3: esperar resultado
+    for intento in range(40):
+        time.sleep(3)
+        try:
+            st_resp = requests.get(
+                f"https://api.cloudconvert.com/v2/jobs/{job_id}",
+                headers=auth_headers,
+                timeout=30,
+            )
+            status = st_resp.json()
+        except Exception as e:
+            print(f"[CloudConvert] Error consultando estado intento {intento+1}: {e}")
+            continue
 
         if "data" not in status:
-            raise RuntimeError(f"CloudConvert: respuesta de estado inválida: {status}")
+            print(f"[CloudConvert] Respuesta de estado inesperada: {status}")
+            continue
 
         job_status = status["data"]["status"]
-        print(f"[CloudConvert] Intento {intento+1}/30 — estado: {job_status}")
+        print(f"[CloudConvert] Intento {intento+1}/40 -- estado: {job_status}")
 
         if job_status == "finished":
-            export_task = next((t for t in status["data"]["tasks"] if t["name"] == "export-file"), None)
+            export_task = next(
+                (t for t in status["data"]["tasks"] if t.get("operation") == "export/url"),
+                None,
+            )
             if not export_task:
-                raise RuntimeError("CloudConvert: no se encontró la tarea de export en resultado")
-            pdf_url = export_task["result"]["files"][0]["url"]
-            pdf_bytes = requests.get(pdf_url, timeout=60).content
-            print(f"[CloudConvert] PDF descargado OK ({len(pdf_bytes)} bytes)")
+                raise RuntimeError("CloudConvert: no se encontro la tarea export/url en el resultado")
+            try:
+                pdf_url = export_task["result"]["files"][0]["url"]
+            except (KeyError, IndexError, TypeError):
+                raise RuntimeError(f"CloudConvert: no se pudo obtener URL del PDF: {export_task}")
+            pdf_bytes = requests.get(pdf_url, timeout=120).content
+            print(f"[CloudConvert] PDF descargado OK ({len(pdf_bytes):,} bytes)")
             return pdf_bytes
 
         if job_status == "error":
-            tasks_errors = [
-                t.get("message", "") for t in status["data"].get("tasks", []) if t.get("status") == "error"
+            task_errors = [
+                f"{t.get('name','?')}: {t.get('message','sin mensaje')}"
+                for t in status["data"].get("tasks", [])
+                if t.get("status") == "error"
             ]
-            raise RuntimeError(f"CloudConvert falló: {'; '.join(tasks_errors) or status}")
+            raise RuntimeError(f"CloudConvert job fallo: {'; '.join(task_errors) or str(status)}")
 
-    raise RuntimeError("CloudConvert timeout: el job tardó más de 60 segundos")
+    raise RuntimeError(f"CloudConvert timeout: el job {job_id} tardo mas de 120 segundos")
 
 
 def _generar_pdf_desde_plantilla(ruta: Path, formato: str, source, marcadores, datos_extra) -> bytes:
