@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from .auth import hash_password
 from .database import init_db, AsyncSessionLocal, Usuario
+from fastapi import FastAPI, Request
+from starlette.middleware.base import BaseHTTPMiddleware
 
 
 async def crear_admin_default():
