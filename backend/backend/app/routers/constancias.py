@@ -19,7 +19,6 @@ EXCEL_DIR = UPLOADS_EXCEL_DIR
 
 _estado: dict[int, dict] = {}
 
-
 class ExcelSource(BaseModel):
     excel_id: str
     sheet_name: str
