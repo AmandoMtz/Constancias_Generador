@@ -6,8 +6,8 @@ COPY . .
 
 RUN rm -f package-lock.json && npm install
 
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_API_URL=https://constanciasgenerador-production.up.railway.app/api
+ENV VITE_API_URL=${VITE_API_URL}
 
 RUN npm run build
 
