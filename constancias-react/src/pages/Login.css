@@ -127,9 +127,10 @@
 }
 
 .login-main-logo {
-  width: min(100%, 300px);
+  width: min(100%, 250px);
   object-fit: contain;
   margin-bottom: 10px;
+  filter: invert(1);
 }
 
 .login-inst-name {
