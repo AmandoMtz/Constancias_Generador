@@ -281,22 +281,30 @@ function archivoUrl(urlArchivo) {
   </div>
 )}
 
-      {previewActiva && (
-  <Modal
-    title={previewActiva.nombre_archivo}
-    onClose={() => setPreviewActiva(null)}
-  >
-    <iframe
-      src={archivoUrl(previewActiva.url_archivo)}
-      title={previewActiva.nombre_archivo}
-      style={{
-        width: '100%',
-        height: '85vh',
-        border: 'none',
-        borderRadius: '10px',
-        background: '#fff',
-      }}
-    />
+     {previewActiva && (
+  <Modal title={previewActiva.nombre_archivo} onClose={() => setPreviewActiva(null)}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <a href={archivoUrl(previewActiva.url_archivo)}
+          download={previewActiva.nombre_archivo}
+          className="btn btn-success"
+          style={{ textDecoration: 'none', fontSize: 13, padding: '6px 14px' }}>
+          ⬇ Descargar PDF
+        </a>
+      </div>
+      <embed
+        src={archivoUrl(previewActiva.url_archivo)}
+        type="application/pdf"
+        style={{ width: '100%', height: '80vh', border: 'none', borderRadius: '10px' }}
+      />
+      <p style={{ fontSize: 12, color: '#999', textAlign: 'center', margin: 0 }}>
+        ¿No se muestra?{' '}
+        <a href={archivoUrl(previewActiva.url_archivo)} target="_blank" rel="noopener noreferrer"
+          style={{ color: 'var(--rojo)' }}>
+          Ábrelo en nueva pestaña
+        </a>
+      </p>
+    </div>
   </Modal>
 )}
 
