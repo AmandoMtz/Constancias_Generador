@@ -318,8 +318,8 @@ def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
         )
 
     # Paso 3: esperar resultado
-    for intento in range(40):
-        time.sleep(3)
+    for intento in range(60):
+        time.sleep(5)
         try:
             st_resp = requests.get(
                 f"https://api.cloudconvert.com/v2/jobs/{job_id}",
@@ -582,7 +582,7 @@ async def generar_lote(envio_id, plantilla, personas, metodo, marcadores, datos_
 
         _estado[envio_id]["enviados"] = enviados
         _estado[envio_id]["errores"] = errores
-        await asyncio.sleep(0.03)
+        await asyncio.sleep(2)  # pausa entre constancias para no saturar CloudConvert
 
     zip_path = None
     if metodo == "zip":
