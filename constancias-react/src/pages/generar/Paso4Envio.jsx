@@ -207,6 +207,7 @@ function archivoUrl(urlArchivo) {
           </div>
         )}
       </div>
+      
 
       <div className="panel">
         <div className="panel-title">Método de salida</div>
