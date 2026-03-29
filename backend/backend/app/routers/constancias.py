@@ -231,39 +231,70 @@ def procesar_pptx(ruta, source, marcadores, datos_extra):
 
 
 def _convertir_a_pdf_bytes(input_path: Path) -> bytes:
-    import subprocess
-    import traceback
+    import requests
+    import time
 
-    with tempfile.TemporaryDirectory(prefix="const_pdf_") as tmpdir:
-        outdir = Path(tmpdir)
+    CLOUDCONVERT_API_KEY = os.getenv("CLOUDCONVERT_API_KEY", "")
+    if not CLOUDCONVERT_API_KEY:
+        raise RuntimeError("CLOUDCONVERT_API_KEY no configurada")
 
-        try:
-            result = subprocess.run(
-                [
-                    "libreoffice",
-                    "--headless",
-                    "--convert-to", "pdf",
-                    "--outdir", str(outdir),
-                    str(input_path),
-                ],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
+    ext = input_path.suffix.lower().lstrip(".")
 
-            if result.returncode != 0:
-                raise RuntimeError(f"LibreOffice error: {result.stderr}")
+    # 1. Crear el job
+    job = requests.post(
+        "https://api.cloudconvert.com/v2/jobs",
+        headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
+        json={
+            "tasks": {
+                "upload-file": {
+                    "operation": "import/upload"
+                },
+                "convert-file": {
+                    "operation": "convert",
+                    "input": "upload-file",
+                    "input_format": ext,
+                    "output_format": "pdf",
+                    "engine": "office"
+                },
+                "export-file": {
+                    "operation": "export/url",
+                    "input": "convert-file"
+                }
+            }
+        }
+    ).json()
 
-        except FileNotFoundError:
-            raise RuntimeError("LibreOffice no está instalado en el servidor")
-        except Exception as e:
-            raise RuntimeError(f"Error al convertir con LibreOffice: {e}\n{traceback.format_exc()}")
+    # 2. Subir el archivo
+    upload_task = next(t for t in job["data"]["tasks"] if t["name"] == "upload-file")
+    upload_url = upload_task["result"]["form"]["url"]
+    upload_params = upload_task["result"]["form"]["parameters"]
 
-        pdf_path = outdir / f"{input_path.stem}.pdf"
-        if not pdf_path.exists():
-            raise RuntimeError(f"No se generó el PDF esperado: {pdf_path}")
+    with open(input_path, "rb") as f:
+        requests.post(upload_url, data=upload_params, files={"file": f})
 
-        return pdf_path.read_bytes()
+    # 3. Esperar resultado
+    job_id = job["data"]["id"]
+    for _ in range(30):
+        time.sleep(2)
+        status = requests.get(
+            f"https://api.cloudconvert.com/v2/jobs/{job_id}",
+            headers={"Authorization": f"Bearer {CLOUDCONVERT_API_KEY}"},
+        ).json()
+
+        if status["data"]["status"] == "finished":
+            export_task = next(t for t in status["data"]["tasks"] if t["name"] == "export-file")
+            pdf_url = export_task["result"]["files"][0]["url"]
+            return requests.get(pdf_url).content
+
+        if status["data"]["status"] == "error":
+            raise RuntimeError(f"CloudConvert error: {status}")
+
+    raise RuntimeError("CloudConvert timeout")
+```
+
+Luego agrega en Railway → **Constancias_Generador** → **Variables**:
+```
+CLOUDCONVERT_API_KEY=tu_api_key_aqui
 
 
 def _generar_pdf_desde_plantilla(ruta: Path, formato: str, source, marcadores, datos_extra) -> bytes:
