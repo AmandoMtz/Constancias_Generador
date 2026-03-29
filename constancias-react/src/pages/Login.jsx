@@ -47,7 +47,7 @@ export default function Login() {
     <div className="login-screen">
       <div className="login-topbar">
         <img src="/assets/uat-horizontal.png" alt="UAT" className="login-top-logo login-top-logo-left" />
-        <img src="/assets/logo-70.png" alt="70 Aniversario FIT" className="login-top-logo login-top-logo-right" />
+        <img src="/assets/logo-70-blanco.png" alt="70 Aniversario FIT" className="login-top-logo login-top-logo-right" />
       </div>
 
       <div className="login-layout">
